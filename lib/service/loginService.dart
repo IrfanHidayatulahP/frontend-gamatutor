@@ -1,0 +1,120 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:gamatutor_kanban/model/user.dart';
+import 'package:gamatutor_kanban/service/localtokenService.dart';
+
+String getApiBaseUrl(String path) {
+  // Jika dijalankan di Web / Chrome / Desktop / iOS Simulator
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+    return 'http://localhost:3000/api$path';
+  }
+  // Khusus Android Emulator
+  return 'http://10.0.2.2:3000/api$path';
+}
+class LoginService {
+  String get baseUrl => getApiBaseUrl('/auth');
+
+  Future<User?> login(String email, String password) async {
+    try {
+      final url = Uri.parse('$baseUrl/login');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'password': password}),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+
+        Map<String, dynamic> userData;
+        String? token;
+        String? refreshToken;
+
+        // Mengecek apakah response dibungkus object { user, token }
+        if (data is Map<String, dynamic> && data.containsKey('user')) {
+          userData = Map<String, dynamic>.from(data['user']);
+          token = data['token'] ?? data['accessToken'] ?? data['access_token'];
+          refreshToken = data['refreshToken'] ?? data['refresh_token'];
+        } else {
+          userData = Map<String, dynamic>.from(data);
+          token = userData['token'] ?? userData['accessToken'] ?? userData['access_token'];
+          refreshToken = userData['refreshToken'] ?? userData['refresh_token'];
+        }
+
+        if (token != null) userData['token'] = token;
+        if (refreshToken != null) userData['refreshToken'] = refreshToken;
+
+        final user = User.fromJson(userData);
+
+        await LocalTokenStorage.saveSession(
+          token: user.token ?? '',
+          refreshToken: user.refreshToken ?? '',
+          userJson: jsonEncode(user.toJson()),
+        );
+
+        return user;
+      } else {
+        debugPrint('Login gagal dengan status HTTP: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('Login error: $e');
+      rethrow;
+    }
+  }
+
+  Future<User?> tryAutoLogin() async {
+    final token = await LocalTokenStorage.getToken();
+    final userJsonStr = await LocalTokenStorage.getUserJson();
+
+    if (token == null || userJsonStr == null) return null;
+
+    try {
+      final userData = jsonDecode(userJsonStr);
+      return User.fromJson(userData);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<User?> refreshAuthToken(String currentToken) async {
+    try {
+      final url = Uri.parse('$baseUrl/refresh');
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $currentToken',
+        },
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        final user = User.fromJson(data['user']);
+        final newToken = data['token'] as String?;
+
+        if (newToken != null) {
+          user.token = newToken;
+        }
+
+        await LocalTokenStorage.saveSession(
+          token: user.token ?? currentToken,
+          refreshToken: user.refreshToken ?? '',
+          userJson: jsonEncode(user.toJson()),
+        );
+
+        return user;
+      } else {
+        await LocalTokenStorage.clearSession();
+        return null;
+      }
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<void> logout() async {
+    await LocalTokenStorage.clearSession();
+  }
+}
