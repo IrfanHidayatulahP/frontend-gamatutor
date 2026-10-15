@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:gamatutor_kanban/model/user.dart';
@@ -10,7 +11,7 @@ String getApiBaseUrl(String path) {
     return 'http://localhost:3000/api$path';
   }
   // Khusus Android Emulator
-  return 'http://10.0.2.2:3000/api$path';
+  return 'http://localhost:3000/api$path';
 }
 class LoginService {
   String get baseUrl => getApiBaseUrl('/auth');
@@ -18,11 +19,13 @@ class LoginService {
   Future<User?> login(String email, String password) async {
     try {
       final url = Uri.parse('$baseUrl/login');
+      debugPrint('Mencoba login ke URL: $url');
+
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
@@ -31,7 +34,6 @@ class LoginService {
         String? token;
         String? refreshToken;
 
-        // Mengecek apakah response dibungkus object { user, token }
         if (data is Map<String, dynamic> && data.containsKey('user')) {
           userData = Map<String, dynamic>.from(data['user']);
           token = data['token'] ?? data['accessToken'] ?? data['access_token'];
@@ -58,6 +60,12 @@ class LoginService {
         debugPrint('Login gagal dengan status HTTP: ${response.statusCode}');
         return null;
       }
+    } on SocketException catch (e) {
+      debugPrint('Network SocketException: $e');
+      throw Exception(
+        'Gagal terhubung ke server ($baseUrl). '
+        'Pastikan backend berjalan di PC & izin koneksi internet diizinkan.',
+      );
     } catch (e) {
       debugPrint('Login error: $e');
       rethrow;

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart' hide Card;
 import 'package:gamatutor_kanban/model/user.dart';
+import 'package:gamatutor_kanban/pages/Auth/authwrapper.dart';
+import 'package:gamatutor_kanban/pages/card/board.dart';
 import 'package:gamatutor_kanban/service/cardService.dart';
 import 'package:gamatutor_kanban/service/localtokenService.dart';
 import 'package:gamatutor_kanban/model/card.dart';
-import 'package:gamatutor_kanban/model/cardlist.dart';
 import 'package:gamatutor_kanban/model/columnmovement.dart';
+import 'package:gamatutor_kanban/service/loginService.dart';
 
 class Dashboard extends StatefulWidget {
   final User? user;
@@ -18,6 +20,7 @@ class _DashboardState extends State<Dashboard> {
   int _selectedIndex = 0;
   User? _currentUser;
   bool _isLoading = true;
+  bool _isSpeedDialOpen = false;
 
   // List data Card utama
   List<Card> _cardsList = [];
@@ -59,12 +62,10 @@ class _DashboardState extends State<Dashboard> {
   Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
 
-    // 1. Ambil Token dari Local Storage
     final token = await LocalTokenStorage.getToken();
     
     if (token != null) {
       try {
-        // 2. Minta data Card aktual dari Database via REST API
         final apiCards = await CardService().getCardsByUser(token);
         if (apiCards.isNotEmpty && mounted) {
           setState(() {
@@ -74,114 +75,11 @@ class _DashboardState extends State<Dashboard> {
           return;
         }
       } catch (e) {
-        debugPrint('Koneksi ke database gagal, menggunakan fallback data: $e');
+        debugPrint('Koneksi ke database gagal: $e');
       }
     }
 
     final now = DateTime.now();
-
-    // 3. Fallback Mock Data (jika server/database belum aktif)
-    _cardsList = [
-      Card(
-        cardId: 'card_101',
-        userId: _currentUser?.userId ?? 'usr_default',
-        title: 'Review Modul Matematika Dasar',
-        cardList: CardList(
-          cardId: 'card_101',
-          courseName: 'Matematika Dasar',
-          subTitle: 'Review Modul Matematika Dasar',
-          description: 'Mempelajari bab aljabar linier dan latihan soal.',
-          learningId : null,
-          difficulty: 'hard',
-          priority: 'high',
-          startTime: now,
-        ),
-        columnMovements: [
-          ColumnMovement(
-            ccmId: 'ccm_101_1',
-            cardId: 'card_101',
-            fromColumn: 'backlog',
-            toColumn: 'todo',
-            timestamp: now.subtract(const Duration(hours: 5)),
-            completed: true,
-          ),
-        ],
-      ),
-      Card(
-        cardId: 'card_102',
-        userId: _currentUser?.userId ?? 'usr_default',
-        title: 'Kuis Pemrograman Dart',
-        cardList: CardList(
-          cardId: 'card_102',
-          courseName: 'Pemrograman Dart',
-          subTitle: 'Kuis Pemrograman Dart',
-          description: 'Kerjakan kuis async await & futures.',
-          learningId : null,
-          difficulty: 'medium',
-          priority: 'medium',
-          startTime: now,
-        ),
-        columnMovements: [
-          ColumnMovement(
-            ccmId: 'ccm_102_1',
-            cardId: 'card_102',
-            fromColumn: 'todo',
-            toColumn: 'in_progress',
-            timestamp: now.subtract(const Duration(hours: 2)),
-            completed: true,
-          ),
-        ],
-      ),
-      Card(
-        cardId: 'card_103',
-        userId: _currentUser?.userId ?? 'usr_default',
-        title: 'Penyusunan Laporan Proyek UI/UX',
-        cardList: CardList(
-          cardId: 'card_103',
-          courseName: 'UI/UX Design',
-          subTitle: 'Penyusunan Laporan Proyek UI/UX',
-          description: 'Rangkum hasil usability testing.',
-          learningId : null,
-          difficulty: 'expert',
-          priority: 'critical',
-          startTime: now,
-        ),
-        columnMovements: [
-          ColumnMovement(
-            ccmId: 'ccm_103_1',
-            cardId: 'card_103',
-            fromColumn: 'todo',
-            toColumn: 'in_progress',
-            timestamp: now.subtract(const Duration(hours: 4)),
-            completed: true,
-          ),
-          ColumnMovement(
-            ccmId: 'ccm_103_2',
-            cardId: 'card_103',
-            fromColumn: 'in_progress',
-            toColumn: 'reflection',
-            timestamp: now.subtract(const Duration(hours: 1)),
-            completed: true,
-          ),
-        ],
-      ),
-      Card(
-        cardId: 'card_104',
-        userId: _currentUser?.userId ?? 'usr_default',
-        title: 'Latihan Soal Fisika',
-        cardList: CardList(
-          cardId: 'card_104',
-          courseName: 'Fisika Dasar',
-          subTitle: 'Latihan Soal Fisika',
-          description: 'Hukum Newton dan Aplikasinya.',
-          learningId : null,
-          difficulty: 'medium',
-          priority: 'low',
-          startTime: now,
-        ),
-        columnMovements: [],
-      ),
-    ];
 
     if (mounted) {
       setState(() => _isLoading = false);
@@ -215,7 +113,7 @@ String get _formattedFocusDuration {
 
       // Cari log saat pertama dari/ke 'todo'
       final todoLog = sortedLogs.cast<ColumnMovement?>().firstWhere(
-            (l) => l?.fromColumn?.toLowerCase() == 'todo' || l?.toColumn?.toLowerCase() == 'todo',
+            (l) => l?.fromColumn?.toLowerCase() == 'planning' || l?.toColumn?.toLowerCase() == 'monitoring',
             orElse: () => null,
           );
 
@@ -243,7 +141,7 @@ String get _formattedFocusDuration {
   List<Card> get _todaysTasks {
     final now = DateTime.now();
     return _cardsList.where((card) {
-      final scheduled = card.cardList?.startTime;
+      final scheduled = card.startTime;
       if (scheduled == null) return false;
       return scheduled.year == now.year &&
           scheduled.month == now.month &&
@@ -251,55 +149,92 @@ String get _formattedFocusDuration {
     }).toList();
   }
 
+  List<Card> _getCardsByColumnCategory(String category) {
+    return _cardsList.where((card) {
+      final col = card.computedColumn ?? 'planning';
+      return col == category;
+    }).toList();
+  }
+
+  Future<void> _handleLogout() async {
+    await LoginService().logout();
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const AuthWrapper()),
+      (route) => false,
+    );
+  }
+
+  Widget _buildHomeView() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHeader(),
+          const SizedBox(height: 16),
+          _buildQuoteCard(),
+          const SizedBox(height: 16),
+          _buildQuestBanner(),
+          const SizedBox(height: 16),
+          _buildCharacterAndStatsCard(),
+          const SizedBox(height: 16),
+          _buildAchievementCard(),
+          const SizedBox(height: 16),
+          _buildLearningPatternCard(),
+          const SizedBox(height: 16),
+          _buildPersonalBestCard(),
+          const SizedBox(height: 20),
+          _buildTaskHeader(),
+          const SizedBox(height: 12),
+          _buildTodaysTaskList(),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceholderView(String title) {
+    return Center(
+      child: Text(
+        title,
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    Widget currentBody;
+    switch (_selectedIndex) {
+      case 0:
+        currentBody = _buildHomeView();
+        break;
+      case 1:
+        currentBody = KanbanBoardView();
+        break;
+      case 2:
+        currentBody = _buildPlaceholderView('Goals Screen');
+        break;
+      case 3:
+        currentBody = _buildPlaceholderView('Progress Screen');
+        break;
+      case 4:
+        currentBody = _buildPlaceholderView('Account Screen');
+        break;
+      default:
+        currentBody = _buildHomeView();
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1. Header Section (Sapaan + Nama Pengguna Dinamis)
-              _buildHeader(),
-              const SizedBox(height: 16),
-
-              // 2. Quote Card
-              _buildQuoteCard(),
-              const SizedBox(height: 16),
-
-              // 3. Quest Banner
-              _buildQuestBanner(),
-              const SizedBox(height: 16),
-
-              // 4. Main Character & Stats Card
-              _buildCharacterAndStatsCard(),
-              const SizedBox(height: 16),
-
-              // 5. Achievement Card
-              _buildAchievementCard(),
-              const SizedBox(height: 16),
-
-              // 6. Learning Pattern Card
-              _buildLearningPatternCard(),
-              const SizedBox(height: 16),
-
-              // 7. Personal Best Card
-              _buildPersonalBestCard(),
-              const SizedBox(height: 20),
-
-              // 8. Bottom Section Title
-              _buildTaskHeader(),
-              const SizedBox(height: 20),
-              
-              // 9. List of Tasks for Today
-              _buildTodaysTaskList(),
-              const SizedBox(height: 20),
-            ],
-          ),
+        child: Stack(
+          children: [
+            currentBody
+          ],
         ),
       ),
       bottomNavigationBar: _buildBottomNavigationBar(),
@@ -990,23 +925,36 @@ String get _formattedFocusDuration {
     return Column(
       children: tasks.map((card) {
         final cm = card.columnMovements?.isNotEmpty == true ? card.columnMovements!.last : null;
-        final isReflection = cm?.toColumn?.toLowerCase() == 'reflection';
-        final isInProgress = cm?.toColumn?.toLowerCase() == 'in_progress';
+        final col = (cm?.toColumn ?? card.computedColumn).toLowerCase();
 
-        final cardList = card.cardList;
+        final subtaskTitle = (card.subtasks.isNotEmpty) ? card.subtasks.first.subTitle : null;
 
         Color badgeBg = const Color(0xFFF1F5F9);
         Color badgeText = const Color(0xFF475569);
-        String badgeLabel = 'To Do';
+        String badgeLabel = 'Planning';
 
-        if (isReflection) {
-          badgeBg = const Color(0xFFDCFCE7);
-          badgeText = const Color(0xFF166534);
-          badgeLabel = 'Reflection';
-        } else if (isInProgress) {
-          badgeBg = const Color(0xFFFEF3C7);
-          badgeText = const Color(0xFF92400E);
-          badgeLabel = 'In Progress';
+        switch (col) {
+          case 'reflection':
+            badgeBg = const Color(0xFFDCFCE7);
+            badgeText = const Color(0xFF166534);
+            badgeLabel = 'Reflection';
+            break;
+          case 'controlling':
+            badgeBg = const Color(0xFFE0E7FF);
+            badgeText = const Color(0xFF3730A3);
+            badgeLabel = 'Controlling';
+            break;
+          case 'monitoring':
+            badgeBg = const Color(0xFFFEF3C7);
+            badgeText = const Color(0xFF92400E);
+            badgeLabel = 'Monitoring';
+            break;
+          case 'planning':
+          default:
+            badgeBg = const Color(0xFFF1F5F9);
+            badgeText = const Color(0xFF475569);
+            badgeLabel = 'Planning';
+            break;
         }
 
         return Container(
@@ -1021,10 +969,10 @@ String get _formattedFocusDuration {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
-                isReflection
+                col == 'reflection'
                     ? Icons.check_circle_rounded
                     : Icons.radio_button_unchecked_rounded,
-                color: isReflection ? const Color(0xFF16A34A) : const Color(0xFF94A3B8),
+                color: col == 'reflection' ? const Color(0xFF16A34A) : const Color(0xFF94A3B8),
                 size: 20,
               ),
               const SizedBox(width: 12),
@@ -1033,19 +981,19 @@ String get _formattedFocusDuration {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      card.title ?? cardList?.subTitle?? 'Tanpa Judul',
+                      (card.title!.isNotEmpty == true ? card.title : subtaskTitle) ?? 'Tanpa Judul',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF0F172A),
-                        decoration: isReflection ? TextDecoration.lineThrough : null,
+                        color: const Color.fromRGBO(15, 23, 42, 1),
+                        decoration: col == 'reflection' ? TextDecoration.lineThrough : null,
                       ),
                     ),
-                    if (cardList?.description != null &&
-                        cardList!.description!.isNotEmpty) ...[
+                    if (card?.description != null &&
+                        card!.description!.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(
-                        cardList.description!,
+                        card.description!,
                         style: const TextStyle(
                           fontSize: 11,
                           color: Color(0xFF64748B),
@@ -1078,6 +1026,7 @@ String get _formattedFocusDuration {
     );
   }
 
+
   Widget _buildBottomNavigationBar() {
     return Container(
       decoration: const BoxDecoration(
@@ -1104,7 +1053,7 @@ String get _formattedFocusDuration {
           BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
             activeIcon: Icon(Icons.home_rounded),
-            label: 'Home',
+            label: 'Home',  
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.view_kanban_outlined),

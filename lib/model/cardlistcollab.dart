@@ -13,13 +13,13 @@ class CardListCollab {
     required this.addedAt
   });
 
-  factory CardListCollab.fromJson(Map<String, dynamic> json) {
+ factory CardListCollab.fromJson(Map<String, dynamic> json) {
     return CardListCollab(
-      collabId: json['collabId'],
-      cardId: json['cardId'],
-      userId: json['userId'],
-      role: json['role'],
-      addedAt: DateTime.parse(json['addedAt'])
+      collabId: json['collab_id'] ?? '',
+      cardId: json['card_id'] ?? '',
+      userId: json['user_id'] ?? '',
+      role: json['member'] ?? 'member',
+      addedAt: json['added_at'] != null ? DateTime.parse(json['added_at']) : null,
     );
   }
 
