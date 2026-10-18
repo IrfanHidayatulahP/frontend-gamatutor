@@ -1,29 +1,40 @@
 class CardList {
-  String? cardId; // PK + FK to cards
+  String? clId;
+  String? cardId;
   String? subTitle;
-  String? endTimeList;
+  DateTime? endTimeList;
+  DateTime? startTimeList;
 
   CardList({
-    required this.cardId,
-    required this.subTitle,
-    required this.endTimeList
+    this.clId,
+    this.cardId,
+    this.subTitle,
+    this.endTimeList,
+    this.startTimeList,
   });
 
- 
-
   factory CardList.fromJson(Map<String, dynamic> json) {
-    return CardList(
-      cardId: json['cardId'] ?? json['card_id'] ?? '',
-      subTitle: json['subTitle'] ?? json['sub_title'],
-      endTimeList: json['endTimeList'] ?? json['end_time_list']
-      );
-  }
+  return CardList(
+    clId: json['cl_id'] ?? json['clId'],
+    cardId: json['card_id'] ?? json['cardId'],
+    subTitle: json['sub_title'] ?? json['subTitle'],
+    // Pastikan menangani start_time_list dari database
+    startTimeList: json['start_time_list'] != null 
+        ? DateTime.parse(json['start_time_list']) 
+        : (json['startTimeList'] != null ? DateTime.parse(json['startTimeList']) : null),
+    endTimeList: json['end_time_list'] != null 
+        ? DateTime.parse(json['end_time_list']) 
+        : (json['endTimeList'] != null ? DateTime.parse(json['endTimeList']) : null),
+  );
+}
 
   Map<String, dynamic> toJson() {
     return {
+      'clId': clId,
       'cardId': cardId,
       'subTitle': subTitle,
-      'endTimeList' : endTimeList
-      };
+      'endTimeList': endTimeList?.toIso8601String(),
+      'startTimeList': startTimeList?.toIso8601String(),
+    };
   }
 }

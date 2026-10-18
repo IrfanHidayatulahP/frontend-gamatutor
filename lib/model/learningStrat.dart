@@ -14,19 +14,24 @@ class LearningStrat {
     required this.learningStrategy,
     required this.description,
     required this.createdAt,
-    required this.cardLists
+    required this.cardLists,
   });
 
   factory LearningStrat.fromJson(Map<String, dynamic> json) {
     return LearningStrat(
-      learningId: json['learningId'],
-      keyCode: json['keyCode'],
-      learningStrategy: json['learningStrategy'],
-      description: json['description'],
-      createdAt: DateTime.parse(json['createdAt']),
+      learningId: (json['learningId'] ?? json['learning_id'])?.toString(),
+      keyCode: (json['keyCode'] ?? json['key_code'])?.toString(),
+      learningStrategy: (json['learningStrategy'] ?? json['learning_strategy'])
+          ?.toString(),
+      description: json['description']?.toString(),
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString())
+          : null,
       cardLists: json['cardLists'] != null
-          ? List<CardList>.from(json['cardLists'].map((x) => CardList.fromJson(x)))
-          : null
+          ? List<CardList>.from(
+              json['cardLists'].map((x) => CardList.fromJson(x)),
+            )
+          : null,
     );
   }
 
@@ -37,7 +42,7 @@ class LearningStrat {
       'learningStrategy': learningStrategy,
       'description': description,
       'createdAt': createdAt?.toIso8601String(),
-      'cardLists': cardLists?.map((x) => x.toJson()).toList()
+      'cardLists': cardLists?.map((x) => x.toJson()).toList(),
     };
   }
 }

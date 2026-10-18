@@ -20,7 +20,7 @@ class _DashboardState extends State<Dashboard> {
   int _selectedIndex = 0;
   User? _currentUser;
   bool _isLoading = true;
-  bool _isSpeedDialOpen = false;
+  final bool _isSpeedDialOpen = false;
 
   // List data Card utama
   List<Card> _cardsList = [];
@@ -42,7 +42,8 @@ class _DashboardState extends State<Dashboard> {
   @override
   void initState() {
     super.initState();
-    _currentUser = widget.user ??
+    _currentUser =
+        widget.user ??
         User(
           userId: 'usr_default',
           email: 'kim.maru@example.com',
@@ -63,7 +64,7 @@ class _DashboardState extends State<Dashboard> {
     setState(() => _isLoading = true);
 
     final token = await LocalTokenStorage.getToken();
-    
+
     if (token != null) {
       try {
         final apiCards = await CardService().getCardsByUser(token);
@@ -87,65 +88,74 @@ class _DashboardState extends State<Dashboard> {
   }
 
   int get _uncompletedTaskCount {
-  return _cardsList.where((card) {
-    final movements = card.columnMovements;
-    final lastMovement = (movements != null && movements.isNotEmpty) 
-        ? movements.last 
-        : null;
-        
-    final col = (lastMovement?.toColumn ?? '').toLowerCase();
-    
-    // Kembalikan kondisi filter Anda di sini, contoh:
-    return col != 'done' && col != 'completed';
-  }).length;
-}
-String get _formattedFocusDuration {
+    return _cardsList.where((card) {
+      final col = (card.computedColumn ?? 'planning').toLowerCase();
+      return col != 'reflection' && col != 'done' && col != 'completed';
+    }).length;
+  }
+
+  int get _completedTaskCount {
+    return _cardsList.where((card) {
+      final col = (card.computedColumn ?? 'planning').toLowerCase();
+      return col == 'reflection' || col == 'done' || col == 'completed';
+    }).length;
+  }
+
+  String get _formattedFocusDuration {
     double totalMinutes = 0;
 
     for (var card in _cardsList) {
-      final movements = card.columnMovements ?? [];
-      if (movements.isEmpty) continue;
-
-      // Urutkan pergerakan berdasarkan timestamp
-      final sortedLogs = List<ColumnMovement>.from(movements)
-        ..sort((a, b) => (a.timestamp ?? DateTime.now())
-            .compareTo(b.timestamp ?? DateTime.now()));
-
-      // Cari log saat pertama dari/ke 'todo'
-      final todoLog = sortedLogs.cast<ColumnMovement?>().firstWhere(
-            (l) => l?.fromColumn?.toLowerCase() == 'planning' || l?.toColumn?.toLowerCase() == 'monitoring',
-            orElse: () => null,
-          );
-
-      // Cari log saat mencapai 'reflection'
-      final reflectionLog = sortedLogs.cast<ColumnMovement?>().firstWhere(
-            (l) => l?.toColumn?.toLowerCase() == 'reflection',
-            orElse: () => null,
-          );
-
-      if (todoLog?.timestamp != null && reflectionLog?.timestamp != null) {
-        final diff = reflectionLog!.timestamp!.difference(todoLog!.timestamp!);
+      // Prioritas 1: Hitung selisih langsung dari startTime ke endTime pada kartu utama
+      if (card.startTime != null && card.endTime != null) {
+        final diff = card.endTime!.difference(card.startTime!);
         if (diff.inMinutes > 0) {
           totalMinutes += diff.inMinutes;
+        }
+      } 
+      // Prioritas 2 (Fallback): Jika card utama belum ada endTime, akumulasikan dari subtask yang punya rentang waktu
+      else if (card.subtasks.isNotEmpty) {
+        for (var sub in card.subtasks) {
+          if (sub.startTimeList != null && sub.endTimeList != null) {
+            final subDiff = sub.endTimeList!.difference(sub.startTimeList!);
+            if (subDiff.inMinutes > 0) {
+              totalMinutes += subDiff.inMinutes;
+            }
+          }
         }
       }
     }
 
+    if (totalMinutes <= 0) return '0j';
+
+    // Jika total menit kurang dari 60, tampilkan dalam bentuk menit (misal: "21 mnt" atau desimal jam)
+    if (totalMinutes < 60) {
+      return '${totalMinutes.toInt()} mnt';
+    }
+
     final double totalHours = totalMinutes / 60.0;
-    if (totalHours == 0) return '0j';
-    if (totalHours % 1 == 0) return '${totalHours.toInt()}j';
+    if (totalHours % 1 == 0) {
+      return '${totalHours.toInt()}j';
+    }
     return '${totalHours.toStringAsFixed(1)}j';
   }
 
   // 3. TUGAS HARI INI: Card yang dijadwalkan pada hari ini
   List<Card> get _todaysTasks {
     final now = DateTime.now();
+    final todayOnly = DateTime(now.year, now.month, now.day);
+
     return _cardsList.where((card) {
-      final scheduled = card.startTime;
-      if (scheduled == null) return false;
-      return scheduled.year == now.year &&
-          scheduled.month == now.month &&
-          scheduled.day == now.day;
+      // Ambil tanggal dari deadline atau startTime, abaikan jamnya
+      DateTime? targetDate = card.deadline ?? card.startTime;
+      if (targetDate == null) return false;
+
+      final targetOnly = DateTime(targetDate.year, targetDate.month, targetDate.day);
+
+      // Jika ingin mencocokkan persis hari ini:
+      return targetOnly.isAtSameMomentAs(todayOnly);
+      
+      // ATAU jika ingin menampilkan SEMUA kartu aktif (agar langsung nampak saat diuji):
+      // return true; 
     }).toList();
   }
 
@@ -200,7 +210,11 @@ String get _formattedFocusDuration {
     return Center(
       child: Text(
         title,
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF64748B),
+        ),
       ),
     );
   }
@@ -230,13 +244,7 @@ String get _formattedFocusDuration {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            currentBody
-          ],
-        ),
-      ),
+      body: SafeArea(child: Stack(children: [currentBody])),
       bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
@@ -290,7 +298,7 @@ String get _formattedFocusDuration {
                 onPressed: () {},
               ),
             ),
-            const SizedBox(width: 8)
+            const SizedBox(width: 8),
           ],
         ),
       ],
@@ -316,7 +324,7 @@ String get _formattedFocusDuration {
             style: TextStyle(
               fontSize: 12,
               fontStyle: FontStyle.italic,
-              color: const Color(0xFF64748B).withOpacity(0.9),
+              color: const Color(0xFF64748B).withValues(alpha: 0.9),
               height: 1.3,
             ),
           ),
@@ -363,10 +371,7 @@ String get _formattedFocusDuration {
                 SizedBox(height: 2),
                 Text(
                   'Petualangan baru sedang disiapkan — nantikan!',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF3B82F6),
-                  ),
+                  style: TextStyle(fontSize: 11, color: Color(0xFF3B82F6)),
                 ),
               ],
             ),
@@ -384,10 +389,10 @@ String get _formattedFocusDuration {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
-          )
+          ),
         ],
       ),
       child: Column(
@@ -411,13 +416,20 @@ String get _formattedFocusDuration {
                   Colors.blue,
                 ),
                 _buildVerticalDivider(),
-                // Dihitung dinamis dari cardlist yang belum masuk 'reflection'
                 _buildStatItem(
-                  Icons.check_circle_outline_rounded,
+                  Icons.close_rounded,
                   '$_uncompletedTaskCount',
-                  'Tugas',
-                  Colors.green,
+                  'Belum Selesai',
+                  Colors.red,
                 ),
+                _buildVerticalDivider(),
+                // 2. Statistik Tugas Selesai (Ikon Checklist Hijau)
+                _buildStatItem(
+                  Icons.check_circle_rounded,
+                  '$_completedTaskCount',
+                  'Selesai',
+                  Colors.green,
+                )
               ],
             ),
           ),
@@ -437,7 +449,10 @@ String get _formattedFocusDuration {
                     top: 12,
                     left: 12,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
@@ -445,7 +460,11 @@ String get _formattedFocusDuration {
                       ),
                       child: Row(
                         children: const [
-                          Icon(Icons.shield_outlined, size: 14, color: Color(0xFF2563EB)),
+                          Icon(
+                            Icons.shield_outlined,
+                            size: 14,
+                            color: Color(0xFF2563EB),
+                          ),
                           SizedBox(width: 4),
                           Text(
                             'Mulai Belajar',
@@ -497,10 +516,12 @@ String get _formattedFocusDuration {
                           width: 90,
                           height: 12,
                           decoration: BoxDecoration(
-                            borderRadius: const BorderRadius.all(Radius.elliptical(90, 12)),
+                            borderRadius: const BorderRadius.all(
+                              Radius.elliptical(90, 12),
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.12),
+                                color: Colors.black.withValues(alpha: 0.12),
                                 blurRadius: 10,
                                 spreadRadius: 1,
                               ),
@@ -519,7 +540,12 @@ String get _formattedFocusDuration {
     );
   }
 
-  Widget _buildStatItem(IconData icon, String value, String label, Color iconColor) {
+  Widget _buildStatItem(
+    IconData icon,
+    String value,
+    String label,
+    Color iconColor,
+  ) {
     return Expanded(
       child: Column(
         children: [
@@ -541,10 +567,7 @@ String get _formattedFocusDuration {
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 11,
-              color: Color(0xFF64748B),
-            ),
+            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
           ),
         ],
       ),
@@ -552,11 +575,7 @@ String get _formattedFocusDuration {
   }
 
   Widget _buildVerticalDivider() {
-    return Container(
-      height: 24,
-      width: 1,
-      color: const Color(0xFFE2E8F0),
-    );
+    return Container(height: 24, width: 1, color: const Color(0xFFE2E8F0));
   }
 
   Widget _buildAchievementCard() {
@@ -613,7 +632,9 @@ String get _formattedFocusDuration {
                         child: const LinearProgressIndicator(
                           value: 0.0,
                           backgroundColor: Color(0xFFF1F5F9),
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF59E0B)),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFFF59E0B),
+                          ),
                           minHeight: 6,
                         ),
                       ),
@@ -676,10 +697,7 @@ String get _formattedFocusDuration {
                   ),
                   Text(
                     'Berdasarkan 30 hari terakhir',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF94A3B8),
-                    ),
+                    style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                   ),
                 ],
               ),
@@ -700,43 +718,9 @@ String get _formattedFocusDuration {
                 SizedBox(height: 4),
                 Text(
                   'Minimal 7 sesi belajar dalam 30 hari terakhir',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Color(0xFF94A3B8),
-                  ),
+                  style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () {},
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFFE2E8F0)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Text(
-                    'Lihat Statistik Lengkap',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF334155),
-                    ),
-                  ),
-                  SizedBox(width: 6),
-                  Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF334155)),
-                ],
-              ),
             ),
           ),
         ],
@@ -832,10 +816,7 @@ String get _formattedFocusDuration {
                 const SizedBox(height: 8),
                 const Text(
                   'Selesaikan minimal 1 sesi untuk lihat personal best',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF94A3B8),
-                  ),
+                  style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                 ),
               ],
             ),
@@ -878,23 +859,6 @@ String get _formattedFocusDuration {
             ),
           ],
         ),
-        GestureDetector(
-          onTap: () {},
-          child: Row(
-            children: const [
-              Text(
-                'Lihat Board',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2563EB),
-                ),
-              ),
-              SizedBox(width: 4),
-              Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF2563EB)),
-            ],
-          ),
-        ),
       ],
     );
   }
@@ -913,127 +877,173 @@ String get _formattedFocusDuration {
         child: const Center(
           child: Text(
             'Tidak ada tugas yang dijadwalkan untuk hari ini.',
-            style: TextStyle(
-              fontSize: 12,
-              color: Color(0xFF94A3B8),
-            ),
+            style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
           ),
         ),
       );
     }
 
+    // 1. Pisahkan tugas menjadi 2 kategori
+    final uncompletedTasks = tasks.where((card) {
+      final col = (card.computedColumn ?? 'planning').toLowerCase();
+      return col != 'reflection';
+    }).toList();
+
+    final completedTasks = tasks.where((card) {
+      final col = (card.computedColumn ?? 'planning').toLowerCase();
+      return col == 'reflection';
+    }).toList();
+
+    // 2. Tampilkan keduanya secara bersamaan dalam Column
     return Column(
-      children: tasks.map((card) {
-        final cm = card.columnMovements?.isNotEmpty == true ? card.columnMovements!.last : null;
-        final col = (cm?.toColumn ?? card.computedColumn).toLowerCase();
-
-        final subtaskTitle = (card.subtasks.isNotEmpty) ? card.subtasks.first.subTitle : null;
-
-        Color badgeBg = const Color(0xFFF1F5F9);
-        Color badgeText = const Color(0xFF475569);
-        String badgeLabel = 'Planning';
-
-        switch (col) {
-          case 'reflection':
-            badgeBg = const Color(0xFFDCFCE7);
-            badgeText = const Color(0xFF166534);
-            badgeLabel = 'Reflection';
-            break;
-          case 'controlling':
-            badgeBg = const Color(0xFFE0E7FF);
-            badgeText = const Color(0xFF3730A3);
-            badgeLabel = 'Controlling';
-            break;
-          case 'monitoring':
-            badgeBg = const Color(0xFFFEF3C7);
-            badgeText = const Color(0xFF92400E);
-            badgeLabel = 'Monitoring';
-            break;
-          case 'planning':
-          default:
-            badgeBg = const Color(0xFFF1F5F9);
-            badgeText = const Color(0xFF475569);
-            badgeLabel = 'Planning';
-            break;
-        }
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // --- KATEGORI 1: BELUM SELESAI ---
+        if (uncompletedTasks.isNotEmpty) ...[
+          const Text(
+            'Belum Selesai',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF64748B),
+            ),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                col == 'reflection'
-                    ? Icons.check_circle_rounded
-                    : Icons.radio_button_unchecked_rounded,
-                color: col == 'reflection' ? const Color(0xFF16A34A) : const Color(0xFF94A3B8),
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      (card.title!.isNotEmpty == true ? card.title : subtaskTitle) ?? 'Tanpa Judul',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: const Color.fromRGBO(15, 23, 42, 1),
-                        decoration: col == 'reflection' ? TextDecoration.lineThrough : null,
-                      ),
-                    ),
-                    if (card?.description != null &&
-                        card!.description!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        card.description!,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: badgeBg,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  badgeLabel,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: badgeText,
-                  ),
-                ),
-              ),
-            ],
+          const SizedBox(height: 8),
+          ...uncompletedTasks.map((card) => _buildTaskCardItem(card, isDone: false)),
+          const SizedBox(height: 16),
+        ],
+
+        // --- KATEGORI 2: SELESAI (REFLECTION) ---
+        if (completedTasks.isNotEmpty) ...[
+          const Text(
+            'Selesai (Reflection)',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF16A34A),
+            ),
           ),
-        );
-      }).toList(),
+          const SizedBox(height: 8),
+          ...completedTasks.map((card) => _buildTaskCardItem(card, isDone: true)),
+        ],
+
+        // Jika kedua list kosong (seharusnya tertangani oleh tasks.isEmpty di atas, tapi untuk berjaga-jaga)
+        if (uncompletedTasks.isEmpty && completedTasks.isEmpty)
+          const Center(
+            child: Text(
+              'Tidak ada tugas hari ini.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+            ),
+          ),
+      ],
     );
   }
 
+  Widget _buildTaskCardItem(Card card, {required bool isDone}) {
+    final col = (card.computedColumn ?? 'planning').toLowerCase();
+    final subtaskTitle = card.subtasks.isNotEmpty ? card.subtasks.first.subTitle : null;
+
+    Color badgeBg = const Color(0xFFF1F5F9);
+    Color badgeText = const Color(0xFF475569);
+    String badgeLabel = 'Planning';
+
+    switch (col) {
+      case 'reflection':
+        badgeBg = const Color(0xFFDCFCE7);
+        badgeText = const Color(0xFF166534);
+        badgeLabel = 'Reflection';
+        break;
+      case 'controlling':
+        badgeBg = const Color(0xFFE0E7FF);
+        badgeText = const Color(0xFF3730A3);
+        badgeLabel = 'Controlling';
+        break;
+      case 'monitoring':
+        badgeBg = const Color(0xFFFEF3C7);
+        badgeText = const Color(0xFF92400E);
+        badgeLabel = 'Monitoring';
+        break;
+      case 'planning':
+      default:
+        badgeBg = const Color(0xFFF1F5F9);
+        badgeText = const Color(0xFF475569);
+        badgeLabel = 'Planning';
+        break;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Icon Berdasarkan Status: Checklist hijau jika selesai, Icon Close / Lingkaran jika belum
+          Icon(
+            isDone ? Icons.check_circle_rounded : Icons.close_rounded,
+            color: isDone ? const Color(0xFF16A34A) : const Color(0xFFEF4444),
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  (card.title != null && card.title!.isNotEmpty
+                          ? card.title
+                          : subtaskTitle) ??
+                      'Tanpa Judul',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF0F172A),
+                    decoration: isDone ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+                if (card.description != null && card.description!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    card.description!,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: badgeBg,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              badgeLabel,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: badgeText,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildBottomNavigationBar() {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(
-          top: BorderSide(color: Color(0xFFE2E8F0), width: 1),
-        ),
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
       ),
       child: BottomNavigationBar(
         currentIndex: _selectedIndex,
@@ -1053,7 +1063,7 @@ String get _formattedFocusDuration {
           BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
             activeIcon: Icon(Icons.home_rounded),
-            label: 'Home',  
+            label: 'Home',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.view_kanban_outlined),

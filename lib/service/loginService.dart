@@ -4,17 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:gamatutor_kanban/model/user.dart';
 import 'package:gamatutor_kanban/service/localtokenService.dart';
+import 'app_config.dart';
 
-String getApiBaseUrl(String path) {
-  // Jika dijalankan di Web / Chrome / Desktop / iOS Simulator
-  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
-    return 'http://localhost:3000/api$path';
-  }
-  // Khusus Android Emulator
-  return 'http://localhost:3000/api$path';
-}
 class LoginService {
-  String get baseUrl => getApiBaseUrl('/auth');
+  String get baseUrl => ApiConstants.getApiBaseUrl('/auth');
 
   Future<User?> login(String email, String password) async {
     try {
