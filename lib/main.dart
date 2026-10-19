@@ -1,7 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:gamatutor_kanban/pages/login/login.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:gamatutor_kanban/service/middleware.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:permission_handler/permission_handler.dart';
 
-void main() {
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+Future<void> main() async {
+ WidgetsFlutterBinding.ensureInitialized();
+
+  // init timezone
+  tz.initializeTimeZones();
+
+  // init notification settings
+  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const initSettings = InitializationSettings(android: androidInit);
+
+  await flutterLocalNotificationsPlugin.initialize(settings: initSettings);
+  var status = await Permission.notification.request();
+  print("Notification permission: $status");
+
   runApp(const MyApp());
 }
 
@@ -23,7 +41,7 @@ class MyApp extends StatelessWidget {
         ),
         useMaterial3: true
       ),
-      home:  LoginPage(),
+      home:  const AuthMiddleware(),
     );
   }
 }

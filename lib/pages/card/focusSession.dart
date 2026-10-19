@@ -1,13 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart' hide Card;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:gamatutor_kanban/model/card.dart';
 import 'package:gamatutor_kanban/model/cardlist.dart';
 import 'package:gamatutor_kanban/pages/card/editCard.dart';
+import 'package:gamatutor_kanban/service/SecureTokenStorage.dart';
 import 'package:gamatutor_kanban/service/cardService.dart';
-import 'package:gamatutor_kanban/service/localtokenService.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 class FocusSessionPage extends StatefulWidget {
   final Card card;
@@ -50,7 +52,7 @@ class AppBlockerService {
   }
 }
 
-class _FocusSessionPageState extends State<FocusSessionPage> {
+class _FocusSessionPageState extends State<FocusSessionPage> with WidgetsBindingObserver{
   final CardService _cardService = CardService();
   String? _strategyName;
   bool _isLoadingStrategy = true;
@@ -58,16 +60,39 @@ class _FocusSessionPageState extends State<FocusSessionPage> {
   late Timer _timer;
   int _secondsElapsed = 0;
   bool _isPaused = false;
+  List<Card> _cardsList = [];
 
-  late final TextEditingController _quickNotesController = TextEditingController(
-    text: widget.card.notes ?? '',
-  );
+  late final TextEditingController _quickNotesController =
+      TextEditingController(text: widget.card.notes ?? '');
+
+   final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _initNotifications();
     _loadLearningStrategy();
     _startFocusTimer();
+    _loadCards();
+    _persistFocusState();
+    _restoreFocusState();
+  }
+
+  Future<void> _loadCards() async {
+    final token = await SecureTokenStorage.getToken();
+    if (token != null) {
+      try {
+        final apiCards = await _cardService.getCardsByUser(token);
+        if (mounted) {
+          setState(() {
+            _cardsList = apiCards;
+          });
+        }
+      } catch (e) {
+        debugPrint('Gagal load cards: $e');
+      }
+    }
   }
 
   void _startFocusTimer() {
@@ -80,8 +105,58 @@ class _FocusSessionPageState extends State<FocusSessionPage> {
     });
   }
 
+Future<void> _persistFocusState() async {
+    await SecureTokenStorage.saveFocusStartTime(DateTime.now().toIso8601String());
+  }
+
+  Future<void> _restoreFocusState() async {
+    final startStr = await SecureTokenStorage.getFocusStartTime();
+    if (startStr != null) {
+      final start = DateTime.parse(startStr);
+      final now = DateTime.now();
+      final diff = now.difference(start).inSeconds;
+      setState(() {
+        _secondsElapsed = diff;
+      });
+    }
+  }
+
+  Future<void> _scheduleFocusReminder() async {
+    await flutterLocalNotificationsPlugin.zonedSchedule(
+      id: 0,
+      title: 'Fokus Mode Masih Aktif',
+      body: 'Sudah 2 menit kamu keluar, jangan lupa akhiri sesi!',
+      scheduledDate: tz.TZDateTime.now(tz.local).add(const Duration(minutes: 2)),
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'focus_channel',
+          'Focus Mode',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+    );
+  }
+
+  Future<void> _initNotifications() async {
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initSettings = InitializationSettings(android: androidInit);
+    await flutterLocalNotificationsPlugin.initialize(settings: initSettings);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _scheduleFocusReminder(); // keluar → jadwalkan notif
+    } else if (state == AppLifecycleState.resumed) {
+      _restoreFocusState(); // balik → restore timer
+    }
+  }
+
   @override
   void dispose() {
+     WidgetsBinding.instance.removeObserver(this);
     _timer.cancel();
     _quickNotesController.dispose();
     super.dispose();
@@ -108,7 +183,7 @@ class _FocusSessionPageState extends State<FocusSessionPage> {
     }
 
     try {
-      final token = await LocalTokenStorage.getToken();
+      final token = await SecureTokenStorage.getToken();
       if (token != null) {
         final strategy = await CardService.getStrategyById(
           token,
@@ -128,8 +203,12 @@ class _FocusSessionPageState extends State<FocusSessionPage> {
   }
 
   Future<void> launchSpotifyPlaylist() async {
-    final Uri spotifyAppUri = Uri.parse('spotify://playlist/37i9dQZF1DX8Uebhn9wzrS');
-    final Uri spotifyWebUri = Uri.parse('https://open.spotify.com/playlist/37i9dQZF1DX8Uebhn9wzrS');
+    final Uri spotifyAppUri = Uri.parse(
+      'spotify://playlist/37i9dQZF1DX8Uebhn9wzrS',
+    );
+    final Uri spotifyWebUri = Uri.parse(
+      'https://open.spotify.com/playlist/37i9dQZF1DX8Uebhn9wzrS',
+    );
 
     try {
       if (await canLaunchUrl(spotifyAppUri)) {
@@ -143,18 +222,26 @@ class _FocusSessionPageState extends State<FocusSessionPage> {
   }
 
   String _getPersonalBest() {
-    if (widget.card.startTime != null && widget.card.endTime != null) {
-      final diff = widget.card.endTime!.difference(widget.card.startTime!);
-      if (diff.inMinutes > 0) {
-        return '${diff.inMinutes} MNT';
+    int? bestMinutes;
+    for (var card in _cardsList) {
+      if (card.startTime != null && card.endTime != null) {
+        final diff = card.endTime!.difference(card.startTime!);
+        if (diff.inMinutes > 0) {
+          if (bestMinutes == null || diff.inMinutes < bestMinutes) {
+            bestMinutes = diff.inMinutes; // ambil yang tercepat
+          }
+        }
       }
     }
-    return '2J 15M';
+    if (bestMinutes == null) return '0MNT';
+    final hours = bestMinutes ~/ 60;
+    final minutes = bestMinutes % 60;
+    return hours > 0 ? '${hours}J ${minutes}M' : '${minutes}MNT';
   }
 
   // --- FUNGSI UTAMA MENYIMPAN CATATAN & MENGAKHIRI SESI ---
   Future<void> _saveNotesAndEndSession() async {
-    final token = await LocalTokenStorage.getToken();
+    final token = await SecureTokenStorage.getToken();
     if (token != null) {
       final String quickNotesText = _quickNotesController.text.trim();
       if (quickNotesText.isNotEmpty) {
@@ -194,26 +281,39 @@ class _FocusSessionPageState extends State<FocusSessionPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Belum, lanjut dlu', style: TextStyle(color: Colors.grey)),
+            child: const Text(
+              'Belum, lanjut dlu',
+              style: TextStyle(color: Colors.grey),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF10B981),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
               elevation: 0,
             ),
             onPressed: () async {
-              Navigator.pop(dialogContext); // Tutup dialog menggunakan dialogContext
-              _timer.cancel(); 
-              
+              Navigator.pop(
+                dialogContext,
+              ); // Tutup dialog menggunakan dialogContext
+              _timer.cancel();
+
               await _saveNotesAndEndSession();
-              await widget.onStopSubtask(widget.card, subtask); 
+              await widget.onStopSubtask(widget.card, subtask);
 
               // 👇 Pengecekan mounted yang aman sebelum menggunakan context utama
               if (!mounted) return;
-              Navigator.pop(context, true); 
+              Navigator.pop(context, true);
             },
-            child: const Text('Gas, Selesai!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Gas, Selesai!',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -224,7 +324,7 @@ class _FocusSessionPageState extends State<FocusSessionPage> {
   Future<void> _handleEndSession() async {
     _timer.cancel();
     try {
-      final token = await LocalTokenStorage.getToken();
+      final token = await SecureTokenStorage.getToken();
       if (token != null) {
         final nowStr = DateTime.now().toIso8601String();
 
@@ -232,11 +332,16 @@ class _FocusSessionPageState extends State<FocusSessionPage> {
 
         for (var sub in widget.card.subtasks) {
           if (sub.endTimeList == null && sub.clId != null) {
-            await _cardService.updateCardList(token, widget.card.cardId!, sub.clId!, {
-              'subTitle': sub.subTitle,
-              'startTimeList': sub.startTimeList?.toIso8601String(),
-              'endTimeList': nowStr,
-            });
+            await _cardService.updateCardList(
+              token,
+              widget.card.cardId!,
+              sub.clId!,
+              {
+                'subTitle': sub.subTitle,
+                'startTimeList': sub.startTimeList?.toIso8601String(),
+                'endTimeList': nowStr,
+              },
+            );
             sub.endTimeList = DateTime.parse(nowStr);
           }
         }
@@ -596,16 +701,28 @@ class _FocusSessionPageState extends State<FocusSessionPage> {
                           subtask.endTimeList == null)
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color.fromARGB(255, 169, 60, 60), // Hijau menenangkan
+                            backgroundColor: const Color.fromARGB(
+                              255,
+                              169,
+                              60,
+                              60,
+                            ), // Hijau menenangkan
                             minimumSize: const Size(75, 30),
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             elevation: 0,
                           ),
                           onPressed: () => _handleStopSingleSubtask(subtask),
-                          icon: const Icon(Icons.check, size: 14, color: Colors.white),
+                          icon: const Icon(
+                            Icons.check,
+                            size: 14,
+                            color: Colors.white,
+                          ),
                           label: const Text(
                             'Akhiri',
-                            style: TextStyle(fontSize: 10.5, color: Colors.white),
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: Colors.white,
+                            ),
                           ),
                         )
                       else

@@ -3,20 +3,25 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:gamatutor_kanban/model/learningStrat.dart';
+import 'package:gamatutor_kanban/service/MdnsHelper.dart';
 import 'package:http/http.dart' as http;
 import 'package:gamatutor_kanban/model/card.dart' as model;
 import 'package:gamatutor_kanban/model/cardlist.dart';
 import 'package:gamatutor_kanban/model/columnmovement.dart';
 import 'package:gamatutor_kanban/service/app_config.dart';
-import 'package:gamatutor_kanban/service/localtokenService.dart';
+import 'package:gamatutor_kanban/service/SecureTokenStorage.dart';
 
 class CardService {
-  static String get baseUrl => ApiConstants.getApiBaseUrl('');
 
   //Mengambil LearningId
   static Future<String?> fetchLearningIdByName(String strategyName) async {
     try {
       final formattedName = strategyName.toLowerCase();
+      final discovered = await MdnsHelper.discoverService();
+      final baseUrl = discovered != null
+          ? "http://$discovered:3000/api/"
+          : ApiConstants.getApiBaseUrl('');
+      
 
       // Menggunakan baseUrl dari ApiConstants
       final response = await http.get(
@@ -38,9 +43,11 @@ class CardService {
   static Future<List<dynamic>> getAllStrategies() async {
     try {
       final token =
-          await LocalTokenStorage.getToken(); // Jika endpoint butuh token auth
-
-      final response = await http.get(
+          await SecureTokenStorage.getToken(); // Jika endpoint butuh token auth
+      final discovered = await MdnsHelper.discoverService();
+      final baseUrl = discovered != null
+          ? "http://$discovered:3000/api/"
+          : ApiConstants.getApiBaseUrl('');final response = await http.get(
         Uri.parse('$baseUrl/learning-strats'), // Pastikan URL endpoint ini benar (misal: http://10.0.2.2:3000/api/learning-strats)
         headers: {
           'Content-Type': 'application/json',
@@ -71,6 +78,10 @@ class CardService {
     String learningId,
   ) async {
     try {
+      final discovered = await MdnsHelper.discoverService();
+      final baseUrl = discovered != null
+          ? "http://$discovered:3000/api/"
+          : ApiConstants.getApiBaseUrl('');
       final response = await http.get(
         Uri.parse('$baseUrl/learning-strats/$learningId'),
         headers: {
@@ -102,6 +113,10 @@ class CardService {
 
   Future<List<model.Card>> getCardsByUser(String token) async {
     try {
+      final discovered = await MdnsHelper.discoverService();
+      final baseUrl = discovered != null
+          ? "http://$discovered:3000/api/"
+          : ApiConstants.getApiBaseUrl('');
       final response = await http.get(
         Uri.parse('$baseUrl/cards'),
         headers: {
@@ -136,6 +151,10 @@ class CardService {
   // Mengambil CardList berdasarkan cardId
   Future<CardList?> getCardList(String token, String cardId) async {
     try {
+      final discovered = await MdnsHelper.discoverService();
+      final baseUrl = discovered != null
+          ? "http://$discovered:3000/api/"
+          : ApiConstants.getApiBaseUrl(''); 
       final response = await http.get(
         Uri.parse('$baseUrl/cards/$cardId/list'),
         headers: {
@@ -159,6 +178,10 @@ class CardService {
     String cardId,
   ) async {
     try {
+      final discovered = await MdnsHelper.discoverService();
+      final baseUrl = discovered != null
+          ? "http://$discovered:3000/api/"
+          : ApiConstants.getApiBaseUrl(''); 
       final response = await http.get(
         Uri.parse('$baseUrl/column-movements/card/$cardId'),
         headers: {
@@ -182,6 +205,10 @@ class CardService {
     String token,
     Map<String, dynamic> cardData,
   ) async {
+    final discovered = await MdnsHelper.discoverService();
+      final baseUrl = discovered != null
+          ? "http://$discovered:3000/api/"
+          : ApiConstants.getApiBaseUrl(''); 
     final response = await http.post(
       Uri.parse('$baseUrl/cards'),
       headers: {
@@ -206,6 +233,10 @@ class CardService {
     String cardId,
     Map<String, dynamic> subTaskData,
   ) async {
+    final discovered = await MdnsHelper.discoverService();
+    final baseUrl = discovered != null
+          ? "http://$discovered:3000/api/"
+          : ApiConstants.getApiBaseUrl(''); 
     final response = await http.post(
       Uri.parse('$baseUrl/cards/$cardId/list'),
       headers: {
@@ -223,6 +254,10 @@ class CardService {
   // Memperbarui Card Utama (PUT /api/cards/:cardId)
   Future<bool> updateCard(String token, String cardId, Map<String, dynamic> updateData) async {
     try {
+      final discovered = await MdnsHelper.discoverService();
+      final baseUrl = discovered != null
+          ? "http://$discovered:3000/api/"
+          : ApiConstants.getApiBaseUrl(''); 
       final response = await http.put(
         Uri.parse('$baseUrl/cards/$cardId'),
         headers: {
@@ -248,6 +283,10 @@ class CardService {
     String clId,
     Map<String, dynamic> subTaskData,
   ) async {
+    final discovered = await MdnsHelper.discoverService();
+      final baseUrl = discovered != null
+          ? "http://$discovered:3000/api/"
+          : ApiConstants.getApiBaseUrl(''); 
     final response = await http.put(
       Uri.parse('$baseUrl/cards/$cardId/list/$clId'),
       headers: {
@@ -264,7 +303,10 @@ class CardService {
 
   // Menghapus Subtask (DELETE /api/cards/:cardId/list)
   Future<void> deleteCardList(String token, String cardId, String clId) async {
-    final response = await http.delete(
+    final discovered = await MdnsHelper.discoverService();
+      final baseUrl = discovered != null
+          ? "http://$discovered:3000/api/"
+          : ApiConstants.getApiBaseUrl('');final response = await http.delete(
       Uri.parse('$baseUrl/cards/$cardId/list/$clId'),
       headers: {
         'Content-Type': 'application/json',
@@ -283,7 +325,11 @@ class CardService {
     String cardId,
     Map<String, dynamic> collabData,
   ) async {
-    final response = await http.post(
+    final discovered = await MdnsHelper.discoverService();
+    final baseUrl = discovered != null
+          ? "http://$discovered:3000/api/"
+          : ApiConstants.getApiBaseUrl('');
+          final response = await http.post(
       Uri.parse(
         '$baseUrl/card-list-collab/card/$cardId',
       ), // Sesuaikan endpoint backend Anda

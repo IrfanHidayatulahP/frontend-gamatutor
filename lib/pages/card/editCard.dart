@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart' hide Card;
 import 'package:gamatutor_kanban/model/card.dart';
 import 'package:gamatutor_kanban/model/cardlist.dart';
+import 'package:gamatutor_kanban/service/SecureTokenStorage.dart';
 import 'package:gamatutor_kanban/service/cardService.dart';
-import 'package:gamatutor_kanban/service/localtokenService.dart';
 import 'package:gamatutor_kanban/service/rekomendasiService.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 
@@ -122,7 +122,7 @@ class _EditTaskPageState extends State<EditTaskPage> {
 
   Future<void> _loadStrategyData() async {
     try {
-      final token = await LocalTokenStorage.getToken();
+      final token = await SecureTokenStorage.getToken();
       if (token == null) {
         setState(() => _isLoadingStrategies = false);
         return;
@@ -152,7 +152,7 @@ class _EditTaskPageState extends State<EditTaskPage> {
   Future<void> _loadFriendsData() async {
     setState(() => _isLoadingFriends = true);
     try {
-      final token = await LocalTokenStorage.getToken();
+      final token = await SecureTokenStorage.getToken();
       if (token == null) return;
 
       // Ambil daftar teman (bisa disesuaikan dengan service API pertemanan yang ada di projekmu)
@@ -201,7 +201,7 @@ class _EditTaskPageState extends State<EditTaskPage> {
                   Navigator.pop(context);
                   // Panggil API untuk mencari/menambahkan kolaborator ke tugas ini
                   try {
-                    final token = await LocalTokenStorage.getToken();
+                    final token = await SecureTokenStorage.getToken();
                     if (token != null && widget.card.cardId != null) {
                       // Contoh pemanggilan API addCollaborator
                       // await CardService().addCollaborator(token, widget.card.cardId!, {'friendUsername': query, 'role': 'member'});
@@ -965,7 +965,7 @@ class _EditTaskPageState extends State<EditTaskPage> {
       };
 
       try {
-        final token = await LocalTokenStorage.getToken();
+        final token = await SecureTokenStorage.getToken();
         if (token != null && widget.card.cardId != null) {
           final cardService = CardService();
 

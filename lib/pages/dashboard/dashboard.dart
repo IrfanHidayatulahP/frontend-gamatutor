@@ -1,11 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart' hide Card;
 import 'package:gamatutor_kanban/model/user.dart';
 import 'package:gamatutor_kanban/pages/Auth/authwrapper.dart';
 import 'package:gamatutor_kanban/pages/card/board.dart';
+import 'package:gamatutor_kanban/service/SecureTokenStorage.dart';
 import 'package:gamatutor_kanban/service/cardService.dart';
-import 'package:gamatutor_kanban/service/localtokenService.dart';
 import 'package:gamatutor_kanban/model/card.dart';
-import 'package:gamatutor_kanban/model/columnmovement.dart';
 import 'package:gamatutor_kanban/service/loginService.dart';
 
 class Dashboard extends StatefulWidget {
@@ -42,28 +43,27 @@ class _DashboardState extends State<Dashboard> {
   @override
   void initState() {
     super.initState();
-    _currentUser =
-        widget.user ??
-        User(
-          userId: 'usr_default',
-          email: 'kim.maru@example.com',
-          firstName: 'Kim',
-          lastName: 'Maru',
-          username: 'kimmaru',
-          role: 'user',
-          status: 'online',
-          archived: false,
-          createdAt: DateTime.now(),
-          token: 'sample_token',
-        );
-
+    _currentUser = widget.user;
+    if (_currentUser == null) {
+      _restoreUserFromStorage();
+    }
     _loadDashboardData();
+  }
+
+  Future<void> _restoreUserFromStorage() async {
+    final userJsonStr = await SecureTokenStorage.getUserJson();
+    if (userJsonStr != null) {
+      final userData = jsonDecode(userJsonStr);
+      setState(() {
+        _currentUser = User.fromJson(userData);
+      });
+    }
   }
 
   Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
 
-    final token = await LocalTokenStorage.getToken();
+    final token = await SecureTokenStorage.getToken();
 
     if (token != null) {
       try {
@@ -111,7 +111,7 @@ class _DashboardState extends State<Dashboard> {
         if (diff.inMinutes > 0) {
           totalMinutes += diff.inMinutes;
         }
-      } 
+      }
       // Prioritas 2 (Fallback): Jika card utama belum ada endTime, akumulasikan dari subtask yang punya rentang waktu
       else if (card.subtasks.isNotEmpty) {
         for (var sub in card.subtasks) {
@@ -149,13 +149,17 @@ class _DashboardState extends State<Dashboard> {
       DateTime? targetDate = card.deadline ?? card.startTime;
       if (targetDate == null) return false;
 
-      final targetOnly = DateTime(targetDate.year, targetDate.month, targetDate.day);
+      final targetOnly = DateTime(
+        targetDate.year,
+        targetDate.month,
+        targetDate.day,
+      );
 
       // Jika ingin mencocokkan persis hari ini:
       return targetOnly.isAtSameMomentAs(todayOnly);
-      
+
       // ATAU jika ingin menampilkan SEMUA kartu aktif (agar langsung nampak saat diuji):
-      // return true; 
+      // return true;
     }).toList();
   }
 
@@ -250,7 +254,7 @@ class _DashboardState extends State<Dashboard> {
   }
 
   Widget _buildHeader() {
-    final displayName = _currentUser?.fullName ?? 'ax!';
+    final displayName = _currentUser?.fullName;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -429,7 +433,7 @@ class _DashboardState extends State<Dashboard> {
                   '$_completedTaskCount',
                   'Selesai',
                   Colors.green,
-                )
+                ),
               ],
             ),
           ),
@@ -909,7 +913,9 @@ class _DashboardState extends State<Dashboard> {
             ),
           ),
           const SizedBox(height: 8),
-          ...uncompletedTasks.map((card) => _buildTaskCardItem(card, isDone: false)),
+          ...uncompletedTasks.map(
+            (card) => _buildTaskCardItem(card, isDone: false),
+          ),
           const SizedBox(height: 16),
         ],
 
@@ -924,7 +930,9 @@ class _DashboardState extends State<Dashboard> {
             ),
           ),
           const SizedBox(height: 8),
-          ...completedTasks.map((card) => _buildTaskCardItem(card, isDone: true)),
+          ...completedTasks.map(
+            (card) => _buildTaskCardItem(card, isDone: true),
+          ),
         ],
 
         // Jika kedua list kosong (seharusnya tertangani oleh tasks.isEmpty di atas, tapi untuk berjaga-jaga)
@@ -941,7 +949,9 @@ class _DashboardState extends State<Dashboard> {
 
   Widget _buildTaskCardItem(Card card, {required bool isDone}) {
     final col = (card.computedColumn ?? 'planning').toLowerCase();
-    final subtaskTitle = card.subtasks.isNotEmpty ? card.subtasks.first.subTitle : null;
+    final subtaskTitle = card.subtasks.isNotEmpty
+        ? card.subtasks.first.subTitle
+        : null;
 
     Color badgeBg = const Color(0xFFF1F5F9);
     Color badgeText = const Color(0xFF475569);
@@ -1005,7 +1015,8 @@ class _DashboardState extends State<Dashboard> {
                     decoration: isDone ? TextDecoration.lineThrough : null,
                   ),
                 ),
-                if (card.description != null && card.description!.isNotEmpty) ...[
+                if (card.description != null &&
+                    card.description!.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
                     card.description!,

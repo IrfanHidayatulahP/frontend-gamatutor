@@ -88,47 +88,6 @@ class Card {
       }
     }
 
-    // Helper internal untuk memecah subTitle jika mengandung koma (multivalue)
-    List<CardList> processSubtaskItem(Map<String, dynamic> item) {
-      final String? clId = (item['clId'] ?? item['cl_Id'])?.toString();
-      final String? cId = (item['cardId'] ?? item['card_id'])?.toString();
-      final String rawSubTitle =
-          (item['subTitle'] ?? item['sub_title'])?.toString() ?? '';
-      final rawEndTime = item['endTimeList'] ?? item['end_time_list'];
-      final DateTime? endTimeParsed = rawEndTime != null
-          ? parseDate(rawEndTime)
-          : null;
-      final rawStartTime = item['startTimeList'] ?? item['start_time_list'];
-      final DateTime? startTimeParsed = rawStartTime != null ? parseDate(rawStartTime) : null;
-
-      if (rawSubTitle.contains(',')) {
-        return rawSubTitle
-            .split(',')
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty)
-            .map(
-              (s) => CardList(
-                clId: clId,
-                cardId: cId,
-                subTitle: s,
-                startTimeList: startTimeParsed,
-                endTimeList: endTimeParsed,
-              ),
-            )
-            .toList();
-      } else {
-        return [
-          CardList(
-            clId: clId,
-            cardId: cId,
-            subTitle: rawSubTitle,
-            startTimeList: startTimeParsed,
-            endTimeList: endTimeParsed,
-          ),
-        ];
-      }
-    }
-
     // Tangani cardList / subtasks
     List<CardList> parsedSubtasks = [];
     final rawSubtasks =

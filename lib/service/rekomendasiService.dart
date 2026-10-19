@@ -1,16 +1,17 @@
 // lib/services/user_quiz_service.dart
 import 'dart:convert';
+import 'package:gamatutor_kanban/service/MdnsHelper.dart';
 import 'package:http/http.dart' as http;
 import 'package:gamatutor_kanban/service/app_config.dart';
 
 class rekomendasiService {
-  // Mengambil baseUrl dari ApiConstants yang sudah dinamis (support web, emulator, dll)
-  static String get baseUrl => ApiConstants.getApiBaseUrl('');
-
   // Mengambil unlocked features berdasarkan userId
   static Future<List<String>> getUnlockedFeatures(String userId, String token) async {
     try {
-      final response = await http.get(
+      final discovered = await MdnsHelper.discoverService();
+      final baseUrl = discovered != null
+          ? "http://$discovered:3000/api/"
+          : ApiConstants.getApiBaseUrl('');final response = await http.get(
         Uri.parse('$baseUrl/user-quiz-results/latest/$userId'),
         headers: {
           'Content-Type': 'application/json',

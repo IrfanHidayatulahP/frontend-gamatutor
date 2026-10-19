@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:gamatutor_kanban/service/SecureTokenStorage.dart';
 import 'package:gamatutor_kanban/service/cardService.dart';
-import 'package:gamatutor_kanban/service/localtokenService.dart';
 import 'package:gamatutor_kanban/service/rekomendasiService.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 
@@ -79,7 +79,7 @@ class _AddCardViewState extends State<AddCardView> {
 
   Future<void> _loadStrategyData() async {
     try {
-      final token = await LocalTokenStorage.getToken();
+      final token = await SecureTokenStorage.getToken();
 
       if (token == null) {
         setState(() => _isLoadingStrategies = false);

@@ -3,8 +3,8 @@ import 'package:gamatutor_kanban/model/card.dart';
 import 'package:gamatutor_kanban/model/cardlist.dart';
 import 'package:gamatutor_kanban/pages/card/editCard.dart';
 import 'package:gamatutor_kanban/pages/card/focusSession.dart';
+import 'package:gamatutor_kanban/service/SecureTokenStorage.dart';
 import 'package:gamatutor_kanban/service/cardService.dart';
-import 'package:gamatutor_kanban/service/localtokenService.dart';
 
 class TaskDetailPage extends StatefulWidget {
   final Card card;
@@ -49,7 +49,7 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
     }
 
     try {
-      final token = await LocalTokenStorage.getToken();
+      final token = await SecureTokenStorage.getToken();
       if (token != null) {
         final strategy = await CardService.getStrategyById(
           token,
@@ -118,7 +118,7 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
                   Navigator.pop(dialogContext);
 
                   try {
-                    final token = await LocalTokenStorage.getToken();
+                    final token = await SecureTokenStorage.getToken();
                     if (token != null) {
                       final nowStr = DateTime.now().toIso8601String();
 
@@ -171,7 +171,7 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
                   ).then((_) async {
                     if (mounted) {
                       try {
-                        final token = await LocalTokenStorage.getToken();
+                        final token = await SecureTokenStorage.getToken();
                         if (token != null && card.cardId != null) {
                           // Ambil semua cards lalu cari card dengan ID yang sama untuk memperbarui state lokal
                           final updatedCards = await _cardService
@@ -223,7 +223,7 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
         ).then((_) async{
           if (mounted) {
             try {
-              final token = await LocalTokenStorage.getToken();
+              final token = await SecureTokenStorage.getToken();
               if (token != null && card.cardId != null) {
                 // Ambil semua cards lalu cari card dengan ID yang sama untuk memperbarui state lokal
                 final updatedCards = await _cardService.getCardsByUser(token);

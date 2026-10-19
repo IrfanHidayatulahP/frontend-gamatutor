@@ -3,8 +3,8 @@ import 'package:gamatutor_kanban/model/card.dart';
 import 'package:gamatutor_kanban/model/cardlist.dart';
 import 'package:gamatutor_kanban/pages/card/newCard.dart';
 import 'package:gamatutor_kanban/pages/card/taskDetail.dart';
+import 'package:gamatutor_kanban/service/SecureTokenStorage.dart';
 import 'package:gamatutor_kanban/service/cardService.dart';
-import 'package:gamatutor_kanban/service/localtokenService.dart';
 
 class KanbanBoardView extends StatefulWidget {
   const KanbanBoardView({super.key});
@@ -27,7 +27,7 @@ class _KanbanBoardViewState extends State<KanbanBoardView> {
 
   Future<void> _saveCardToBackend(Map<String, dynamic> cardData) async {
     try {
-      final token = await LocalTokenStorage.getToken();
+      final token = await SecureTokenStorage.getToken();
       if (token == null) return;
 
       final createdCard = await _cardService.createCard(token, cardData);
@@ -77,7 +77,7 @@ class _KanbanBoardViewState extends State<KanbanBoardView> {
 
   Future<void> _fetchKanbanCards() async {
     try {
-      final token = await LocalTokenStorage.getToken();
+      final token = await SecureTokenStorage.getToken();
       if (!mounted || token == null) return;
 
       final fetchedCards = await _cardService.getCardsByUser(token);
@@ -761,7 +761,7 @@ class _KanbanBoardViewState extends State<KanbanBoardView> {
   }
 
   void _showAddCardDialog() async {
-    final token = await LocalTokenStorage.getToken();
+    final token = await SecureTokenStorage.getToken();
     if (token == null) return;
     final result = await Navigator.push(
       context,
@@ -783,7 +783,7 @@ class _KanbanBoardViewState extends State<KanbanBoardView> {
 
   Future<void> _handleStartSubtask(Card card, CardList subtask) async {
     try {
-      final token = await LocalTokenStorage.getToken();
+      final token = await SecureTokenStorage.getToken();
       if (token == null) return;
 
       final nowStr = DateTime.now().toIso8601String();
@@ -818,7 +818,7 @@ class _KanbanBoardViewState extends State<KanbanBoardView> {
 
   Future<void> _handleStopSubtask(Card card, CardList subtask) async {
     try {
-      final token = await LocalTokenStorage.getToken();
+      final token = await SecureTokenStorage.getToken();
       if (token == null) return;
 
       final nowStr = DateTime.now().toIso8601String();
@@ -848,7 +848,7 @@ class _KanbanBoardViewState extends State<KanbanBoardView> {
   void _showReflectionDialog(Card card) async {
     String? strategyLabel = 'Strategi Belajar';
     try {
-      final token = await LocalTokenStorage.getToken();
+      final token = await SecureTokenStorage.getToken();
       if (token != null && card.learningId != null) {
         final strategy = await CardService.getStrategyById(
           token,
@@ -1040,7 +1040,7 @@ class _KanbanBoardViewState extends State<KanbanBoardView> {
                         onPressed: () async {
                           Navigator.pop(context);
                           try {
-                            final token = await LocalTokenStorage.getToken();
+                            final token = await SecureTokenStorage.getToken();
                             if (token == null) return;
 
                             await _cardService.updateCard(token, card.cardId!, {
