@@ -381,7 +381,7 @@ String get _formattedFocusDuration {
             style: TextStyle(
               fontSize: 12,
               fontStyle: FontStyle.italic,
-              color: const Color(0xFF64748B).withOpacity(0.9),
+              color: const Color(0xFF64748B).withValues(alpha: 0.9),
               height: 1.3,
             ),
           ),
@@ -449,7 +449,7 @@ String get _formattedFocusDuration {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           )
@@ -565,7 +565,7 @@ String get _formattedFocusDuration {
                             borderRadius: const BorderRadius.all(Radius.elliptical(90, 12)),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.12),
+                                color: Colors.black.withValues(alpha: 0.12),
                                 blurRadius: 10,
                                 spreadRadius: 1,
                               ),
