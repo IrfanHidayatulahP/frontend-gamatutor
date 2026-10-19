@@ -37,22 +37,17 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      // Mendukung kunci 'userId' (camelCase) maupun 'user_id' / 'id' (snake_case)
-      userId: json['userId'] ?? json['user_id'] ?? json['id'],
-      email: json['email'],
-      // Mendukung kunci 'firstName' (camelCase) maupun 'first_name' (snake_case)
-      firstName: json['firstName'] ?? json['first_name'],
-      // Mendukung kunci 'lastName' (camelCase) maupun 'last_name' (snake_case)
-      lastName: json['lastName'] ?? json['last_name'],
-      username: json['username'],
-      role: json['role'],
-      status: json['status'],
-      archived: json['archived'],
-      createdAt: (json['createdAt'] ?? json['created_at']) != null
-          ? DateTime.tryParse((json['createdAt'] ?? json['created_at']).toString())
-          : null,
-      token: json['token'] ?? json['accessToken'] ?? json['access_token'],
-      refreshToken: json['refreshToken'] ?? json['refresh_token']
+      userId: json['userId'] ?? '',
+    email: json['email'] ?? '',
+    firstName: json['firstName'] ?? json['first_name'] ?? '',
+    lastName: json['lastName'] ?? json['last_name'] ?? '',
+    username: json['username'] ?? '',
+    role: json['role'] ?? '',
+    status: json['status'] ?? '',
+    archived: json['archived'] ?? false,
+    createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
+    token: json['token'] ?? '',
+      refreshToken: json['refreshToken'] ?? json['refresh_token'] ?? ''
     );
   }
 

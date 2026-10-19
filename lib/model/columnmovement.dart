@@ -16,13 +16,14 @@ class ColumnMovement {
   });
   
   factory ColumnMovement.fromJson(Map<String, dynamic> json) {
+    final rawTimestamp = json['timestamp'];
     return ColumnMovement(
-      ccmId: json['ccmId'],
-      cardId: json['cardId'],
-      fromColumn: json['fromColumn'],
-      toColumn: json['toColumn'],
-      timestamp: DateTime.parse(json['timestamp']),
-      completed: json['completed']
+      ccmId: (json['ccmId'] ?? json['ccm_id'])?.toString(),
+      cardId: (json['cardId'] ?? json['card_id'])?.toString(),
+      fromColumn: (json['fromColumn'] ?? json['from_column'])?.toString(),
+      toColumn: (json['toColumn'] ?? json['to_column'])?.toString() ?? '',
+      timestamp: rawTimestamp != null ? DateTime.tryParse(rawTimestamp.toString()) : null,
+      completed: json['completed'] ?? false,
     );
   }
 
